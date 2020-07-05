@@ -40,6 +40,7 @@
  * \asf_license_stop
  *
  */
+#if defined(__SAM3X8E__)
 
 #include <string.h>
 #include <assert.h>
@@ -914,3 +915,4 @@ uint32_t flash_erase_user_signature(void)
 #endif
 /**INDENT-ON**/
 /// @endcond
+#endif

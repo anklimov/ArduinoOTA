@@ -40,6 +40,7 @@
  * \asf_license_stop
  *
  */
+#if defined(__SAM3X8E__)
 
 #include "efc.h"
 
@@ -338,3 +339,4 @@ uint32_t efc_perform_fcr(Efc *p_efc, uint32_t ul_fcr)
 #endif
 /**INDENT-ON**/
 /// @endcond
+#endif
