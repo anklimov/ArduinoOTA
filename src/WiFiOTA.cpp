@@ -252,11 +252,11 @@ void WiFiOTAClass::pollServer(Client& client)
     } while (header != "");
 
     bool dataUpload = false;
-#if defined(ESP8266) || defined(ESP32)
+//#if defined(ESP8266) || defined(ESP32)
     if (request == "POST /data HTTP/1.1") {
       dataUpload = true;
     } else
-#endif
+//#endif
     if (request != "POST /sketch HTTP/1.1") {
       flushRequestBody(client, contentLength);
       sendHttpResponse(client, 404, "Not Found");

@@ -29,9 +29,12 @@
 class InternalStorageClass : public OTAStorage {
 public:
 
-  InternalStorageClass();
+  InternalStorageClass(uint32_t dataAddress=0);
 
-  virtual int open(int length);
+
+  virtual int open(int length) {return open(length,0);};
+  virtual int open(int length, uint8_t _command);
+
   virtual size_t write(uint8_t);
   virtual void close();
   virtual void clear();
@@ -40,7 +43,9 @@ public:
 
 private:
   const uint32_t MAX_PARTIONED_SKETCH_SIZE, STORAGE_START_ADDRESS;
+  uint32_t DATA_START_ADDRESS;
   uint32_t _sketchSize;
+  uint8_t command;
 
 
 #if defined(__SAM3X8E__)

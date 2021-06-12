@@ -33,11 +33,12 @@
 #endif
 
 
-InternalStorageClass::InternalStorageClass() :
+InternalStorageClass::InternalStorageClass(uint32_t dataAddress) :
 
   MAX_PARTIONED_SKETCH_SIZE((MAX_FLASH - SKETCH_START_ADDRESS) / 2),
-  STORAGE_START_ADDRESS(SKETCH_START_ADDRESS + MAX_PARTIONED_SKETCH_SIZE)
+  STORAGE_START_ADDRESS(SKETCH_START_ADDRESS + MAX_PARTIONED_SKETCH_SIZE)  
 { 
+  DATA_START_ADDRESS = STORAGE_START_ADDRESS + dataAddress;
   _writeIndex = 0;
   _writeAddress = nullptr;
   _sketchSize = 0;
@@ -151,7 +152,7 @@ uint32_t *p_dest;
 int32_t  left;
 
 
-Serial.print("Flashing bytes:");
+Serial.print("Flashing firmware:");
 Serial.println(length);
 Serial.print("From:");
 Serial.println(src,HEX);
@@ -256,14 +257,19 @@ RSTC->RSTC_CR = 0xA5000005;
 } //extern C
 
 
-int InternalStorageClass::open(int length)
+int InternalStorageClass::open(int length, uint8_t _command)
 {
   (void)length;
+  command=_command;
   _writeIndex = 0;
-  _writeAddress = (addressData*)STORAGE_START_ADDRESS;
+  
+  if (command) _writeAddress = (addressData*)DATA_START_ADDRESS;
 
-Serial.println("Open flash for write\n");
+  else        _writeAddress = (addressData*)STORAGE_START_ADDRESS;
 
+Serial.print("Open flash for write from ");
+Serial.println( (uint32_t) _writeAddress,HEX);
+delay(300);
 #ifdef ARDUINO_ARCH_SAMD
   // enable auto page writes
   NVMCTRL->CTRLB.bit.MANW = 0;
@@ -277,7 +283,7 @@ Serial.println("Open flash for write\n");
     }
 #endif
 
-eraseFlash(STORAGE_START_ADDRESS, MAX_PARTIONED_SKETCH_SIZE, PAGE_SIZE);
+if (!command) eraseFlash(STORAGE_START_ADDRESS, MAX_PARTIONED_SKETCH_SIZE, PAGE_SIZE);
 
   return 1;
 }
@@ -322,12 +328,16 @@ return 1;
 void InternalStorageClass::close()  
 {
 #if defined(__SAM3X8E__)
-_sketchSize = (uint32_t)_writeAddress-STORAGE_START_ADDRESS+_writeIndex;
+if (command)
+    _sketchSize = (uint32_t)_writeAddress-DATA_START_ADDRESS+_writeIndex;
+else 
+    _sketchSize = (uint32_t)_writeAddress-STORAGE_START_ADDRESS+_writeIndex;
 
 while (_writeIndex) write(0xff);  //Finish block
 
 Serial.print("\nReceived bytes:");
 Serial.println(_sketchSize);
+delay(300);
 #else 
 
   while ((int)_writeAddress % PAGE_SIZE) {
@@ -345,6 +355,14 @@ void InternalStorageClass::clear()
 void InternalStorageClass::apply()
 {
   //noInterrupts(); moved inside routine
+if (command) 
+    {
+//    Interrupts();
+    Serial.println("Config Data flashed. Rebooting");
+    delay(300);
+    NVIC_SystemReset();
+    return;
+    }
 
 #if defined(__SAM3X8E__)
   copyFlashAndReset(SKETCH_START_ADDRESS, STORAGE_START_ADDRESS, _sketchSize, PAGE_SIZE);
