@@ -35,7 +35,7 @@ InternalStorageESPClass::InternalStorageESPClass()
 {
 }
 
-int InternalStorageESPClass::open(int length, uint8_t command)
+int InternalStorageESPClass::open(int length, int8_t command)
 {
   return Update.begin(length, command == 0 ? U_FLASH : U_SPIFFS);
 }
@@ -63,6 +63,11 @@ long InternalStorageESPClass::maxSize()
 {
   return ESP.getFlashChipSize() / 2; // Update.begin() in open() does the exact check
 }
+
+int InternalStorageESPClass::read()
+{
+  return -1;
+};
 
 InternalStorageESPClass InternalStorage;
 

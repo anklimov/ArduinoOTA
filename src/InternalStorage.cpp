@@ -42,6 +42,7 @@ InternalStorageClass::InternalStorageClass(uint32_t dataAddress) :
   _writeIndex = 0;
   _writeAddress = nullptr;
   _sketchSize = 0;
+  command=-1;
 #if defined(__SAM3X8E__)
   flash_init(FLASH_ACCESS_MODE_128, 6);
 #endif
@@ -257,7 +258,7 @@ RSTC->RSTC_CR = 0xA5000005;
 } //extern C
 
 
-int InternalStorageClass::open(int length, uint8_t _command)
+int InternalStorageClass::open(int length, int8_t _command)
 {
   (void)length;
   command=_command;
@@ -376,6 +377,11 @@ long InternalStorageClass::maxSize()
 {
   return MAX_PARTIONED_SKETCH_SIZE;
 }
+
+int InternalStorageClass::read()
+{
+  return -1;
+};
 
 InternalStorageClass InternalStorage;
 

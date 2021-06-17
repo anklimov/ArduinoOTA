@@ -40,12 +40,13 @@ public:
   virtual void clear();
   virtual void apply();
   virtual long maxSize();
+  virtual int read();
 
 private:
   const uint32_t MAX_PARTIONED_SKETCH_SIZE, STORAGE_START_ADDRESS;
   uint32_t DATA_START_ADDRESS;
   uint32_t _sketchSize;
-  uint8_t command;
+  int8_t command;
 
 
 #if defined(__SAM3X8E__)

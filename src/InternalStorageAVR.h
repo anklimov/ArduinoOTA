@@ -25,19 +25,23 @@
 class InternalStorageAVRClass : public OTAStorage {
 public:
 
-  InternalStorageAVRClass();
-
-  virtual int open(int length);
+  InternalStorageAVRClass(uint32_t dataAddress=0);
+ 
+  virtual int open(int length) {return open(length, 0);}
+  virtual int open(int length,  int8_t _command);
   virtual size_t write(uint8_t);
   virtual void close();
   virtual void clear();
   virtual void apply();
   virtual long maxSize();
+  virtual int read();
 
 private:
+  uint32_t DATA_START_ADDRESS;
   uint32_t maxSketchSize;
   uint32_t pageAddress;
   uint16_t pageIndex;
+  uint8_t  command;
 
   union {
     uint16_t u16;

@@ -67,7 +67,8 @@ WiFiOTAClass::WiFiOTAClass() :
   _storage(NULL),
   localIp(0),
   _lastMdnsResponseTime(0),
-  beforeApplyCallback(nullptr)
+  beforeApplyCallback(nullptr),
+  processCustomRequest(nullptr)
 {
 }
 
@@ -251,30 +252,63 @@ void WiFiOTAClass::pollServer(Client& client)
       }
     } while (header != "");
 
-    bool dataUpload = false;
-//#if defined(ESP8266) || defined(ESP32)
+    int  dataType = -1;
+    bool isUpload = true;
+    int  retCode;
+
+    if (_expectedAuthorization != authorization) {
+      flushRequestBody(client, contentLength);
+      //client.println("WWW-Authenticate: Basic realm=\"Access restricted\"");
+      sendHttpResponse(client, 401, "Unauthorized");
+      return;
+    }
+
     if (request == "POST /data HTTP/1.1") {
-      dataUpload = true;
+      dataType = DATA_FS;
+      isUpload = true;
     } else
-//#endif
-    if (request != "POST /sketch HTTP/1.1") {
+
+    if (request == "GET /data HTTP/1.1") {
+      dataType = DATA_FS;
+      isUpload=false;
+    } else
+
+    if (request == "POST /config HTTP/1.1") {
+      dataType = DATA_CONFIG;
+      isUpload = true;
+    } else
+
+    if (request == "GET /config HTTP/1.1") {
+      dataType = DATA_CONFIG;
+      isUpload = false;
+    } else
+    
+
+    if (request == "POST /sketch HTTP/1.1") {
+      dataType = DATA_SKETCH; 
+      isUpload = true;
+    } else
+
+    if (processCustomRequest && (retCode = processCustomRequest(client,request,contentLength))>0)
+    {
+      client.stop();
+      return;
+    } else
+
+    {
       flushRequestBody(client, contentLength);
       sendHttpResponse(client, 404, "Not Found");
       return;
     }
 
-    if (_expectedAuthorization != authorization) {
-      flushRequestBody(client, contentLength);
-      sendHttpResponse(client, 401, "Unauthorized");
-      return;
-    }
 
-    if (contentLength <= 0) {
+
+    if (isUpload && contentLength <= 0) {
       sendHttpResponse(client, 400, "Bad Request");
       return;
     }
 
-    if (_storage == NULL || !_storage->open(contentLength, dataUpload)) {
+    if (_storage == NULL || !_storage->open(contentLength, dataType)) {
       flushRequestBody(client, contentLength);
       sendHttpResponse(client, 500, "Internal Server Error");
       return;
@@ -289,32 +323,53 @@ void WiFiOTAClass::pollServer(Client& client)
 
     long read = 0;
     byte buff[64];
+    if (isUpload)
+    {
+          while (client.connected() && read < contentLength) {
+            while (client.available()) {
+              int l = client.read(buff, sizeof(buff));
+              for (int i = 0; i < l; i++) {
+                _storage->write(buff[i]);
+              }
+              read += l;
+            }
+          }
 
-    while (client.connected() && read < contentLength) {
-      while (client.available()) {
-        int l = client.read(buff, sizeof(buff));
-        for (int i = 0; i < l; i++) {
-          _storage->write(buff[i]);
-        }
-        read += l;
-      }
-    }
+          _storage->close();
 
-    _storage->close();
+          if (read == contentLength) {
+            sendHttpResponse(client, 200, "OK");
 
-    if (read == contentLength) {
-      sendHttpResponse(client, 200, "OK");
+            delay(500);
 
-      delay(500);
+            if (beforeApplyCallback) {
+              beforeApplyCallback();
+            }
 
-      if (beforeApplyCallback) {
-        beforeApplyCallback();
-      }
+            // apply the update
+            _storage->apply();
+            
+            while (true);
+     }
+    else //Download
+     { 
+       //uint32_t dataLen = _storage->dataLen();
+       client.println("HTTP/1.1 200 OK");
+       //Server: nginx/0.6.31
+       client.println("Content-Type: text/json");//; charset=utf-8
+       //client.println("Content-Length: "+1234);
+       client.println("Connection: close\n");
 
-      // apply the update
-      _storage->apply();
-      
-      while (true);
+       int16_t ch;
+       while (client.connected() && (ch = _storage->read()) >=0) 
+          {
+            client.write(ch);
+          }
+      _storage->close(); 
+      client.stop();   
+
+     } 
+
     } else {
 
       sendHttpResponse(client, 414, "Payload size wrong");

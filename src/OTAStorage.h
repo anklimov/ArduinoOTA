@@ -33,7 +33,7 @@ public:
   OTAStorage();
 
   virtual int open(int length) = 0;
-  virtual int open(int length, uint8_t command) {
+  virtual int open(int length, int8_t command) {
     (void) command;
     return open(length);
   }
@@ -41,6 +41,7 @@ public:
   virtual void close() = 0;
   virtual void clear() = 0;
   virtual void apply() = 0;
+  virtual int read() = 0;
 
   virtual long maxSize() {
     return (MAX_FLASH - SKETCH_START_ADDRESS - bootloaderSize);

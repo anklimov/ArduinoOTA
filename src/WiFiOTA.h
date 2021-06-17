@@ -21,6 +21,11 @@
  by Juraj Andrassy
 */
 
+
+#define DATA_SKETCH 0
+#define DATA_FS 1
+#define DATA_CONFIG 2
+
 #ifndef _WIFI_OTA_H_INCLUDED
 #define _WIFI_OTA_H_INCLUDED
 
@@ -42,8 +47,18 @@ protected:
   void pollServer(Client& client);
 
 public:
+  void setCustomHandler(int (*fn)(Client& client, String request, long contentLength))
+  {
+    processCustomRequest = fn;
+  }
+
   void beforeApply(void (*fn)(void)) {
     beforeApplyCallback = fn;
+  }
+  
+  void setDeviceName(char * name)
+  {
+    _name = name;
   }
 
 private:
@@ -59,6 +74,7 @@ private:
   uint32_t _lastMdnsResponseTime;
   
   void (*beforeApplyCallback)(void);
+  int (*processCustomRequest)(Client& client, String request, long contentLength);
 };
 
 #endif

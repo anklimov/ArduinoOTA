@@ -29,12 +29,13 @@ public:
   virtual int open(int length) {
     return open(length, 0);
   }
-  virtual int open(int length, uint8_t command);
+  virtual int open(int length, int8_t command);
   virtual size_t write(uint8_t);
   virtual void close();
   virtual void clear();
   virtual void apply();
   virtual long maxSize();
+  virtual int read();
 
 private:
 };
