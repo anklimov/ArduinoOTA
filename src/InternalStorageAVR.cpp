@@ -82,10 +82,18 @@ break;
 }
 
 void InternalStorageAVRClass::close() {
-  if (pageIndex && command == DATA_SKETCH) {
+switch (command)
+{
+case DATA_SKETCH: 
+  if (pageIndex) {
     optiboot_page_write(pageAddress);
   }
   pageIndex = 0;
+break;
+case DATA_FS:
+case DATA_CONFIG:
+    EEPROM.update(pageAddress++,255);  
+}
 }
 
 void InternalStorageAVRClass::clear() {
@@ -118,9 +126,12 @@ case DATA_SKETCH:
    return -1;
    
 case DATA_CONFIG:
-case DATA_FS:
-    return EEPROM.read(pageAddress++);
+    ch =  EEPROM.read(pageAddress++);
+    return (ch == 255)?-1:ch;
     
+case DATA_FS:    
+    return EEPROM.read(pageAddress++);
+
 }  
 };
 

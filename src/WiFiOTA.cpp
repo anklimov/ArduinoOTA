@@ -245,7 +245,7 @@ void WiFiOTAClass::pollServer(Client& client)
         header.remove(0, 16);
 
         contentLength = header.toInt();
-      } else if (header.startsWith("Authorization: ")) {
+      } else if (header.startsWith("Authorization: ") || header.startsWith("authorization: ")) {
         header.remove(0, 15);
 
         authorization = header;
@@ -337,7 +337,8 @@ void WiFiOTAClass::pollServer(Client& client)
 
           _storage->close();
 
-          if (read == contentLength) {
+          if (read == contentLength) 
+          {
             sendHttpResponse(client, 200, "OK");
 
             delay(500);
@@ -350,6 +351,14 @@ void WiFiOTAClass::pollServer(Client& client)
             _storage->apply();
             
             while (true);
+          } 
+          else 
+          {
+          sendHttpResponse(client, 414, "Payload size wrong");
+          _storage->clear();
+          delay(500);
+          client.stop();
+          }        
      }
     else //Download
      { 
@@ -361,8 +370,10 @@ void WiFiOTAClass::pollServer(Client& client)
        client.println("Connection: close\n");
 
        int16_t ch;
-       while (client.connected() && (ch = _storage->read()) >=0) 
+       uint32_t counter=0;
+       while ( client.connected() &&  counter<4096 && (ch = _storage->read()) >=0) 
           {
+            counter++;
             client.write(ch);
           }
       _storage->close(); 
@@ -370,15 +381,7 @@ void WiFiOTAClass::pollServer(Client& client)
 
      } 
 
-    } else {
 
-      sendHttpResponse(client, 414, "Payload size wrong");
-      _storage->clear();
-
-      delay(500);
-
-      client.stop();
-    }
   }
 }
 
