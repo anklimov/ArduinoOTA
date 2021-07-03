@@ -51,8 +51,8 @@ public:
 	    {
 	    };
 
-  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage) {
-    WiFiOTAClass::begin(localIP, name, password, storage);
+  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& BINConfig = NULL, seekableStream& JSONConfig=NULL ) {
+    WiFiOTAClass::begin(localIP, name, password, storage, BINConfig, JSONConfig);
     server.begin();
   }
 
@@ -86,8 +86,8 @@ private:
 public:
   ArduinoOTAMdnsClass() {};
 
-  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage) {
-    ArduinoOTAClass<NetServer, NetClient>::begin(localIP, name, password, storage);
+  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& BINConfig = NULL, seekableStream& JSONConfig=NULL) {
+    ArduinoOTAClass<NetServer, NetClient>::begin(localIP, name, password, storage, BINConfig, JSONConfig);
 #if defined(ESP8266) && !(defined(ethernet_h_) || defined(ethernet_h) || defined(UIPETHERNET_H))
     mdnsSocket.beginMulticast(localIP, IPAddress(224, 0, 0, 251), 5353);
 #else
@@ -107,7 +107,10 @@ public:
 
 };
 
-#if defined(ethernet_h_) || defined(ethernet_h) // Ethernet library
+#if defined (ARDUINO_OTA_MDNS_DISABLE) //Forced disable
+ArduinoOTAClass  <EthernetServer, EthernetClient>   ArduinoOTA;
+
+#elif defined(ethernet_h_) || defined(ethernet_h) // Ethernet library
 ArduinoOTAMdnsClass  <EthernetServer, EthernetClient, EthernetUDP>   ArduinoOTA;
 
 #elif defined(UIPETHERNET_H) // no UDP multicast implementation yet

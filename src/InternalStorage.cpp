@@ -21,6 +21,7 @@
  by Juraj Andrassy
 */
 
+
 #if !defined(__AVR__) && !defined(ESP8266) && !defined(ESP32)
 
 #include <Arduino.h>
@@ -30,17 +31,22 @@
 #if defined(__SAM3X8E__)
 #include "flash_efc.h"
 #include "efc.h"
+#define  FLASH_START  ((byte *)IFLASH1_ADDR)
 #endif
 
-
-InternalStorageClass::InternalStorageClass(uint32_t dataAddress) :
+#include "WiFiOTA.h"
+InternalStorageClass::InternalStorageClass() :
 
   MAX_PARTIONED_SKETCH_SIZE((MAX_FLASH - SKETCH_START_ADDRESS) / 2),
   STORAGE_START_ADDRESS(SKETCH_START_ADDRESS + MAX_PARTIONED_SKETCH_SIZE)  
+//STORAGE_START_ADDRESS((uint32_t) FLASH_START)  
+
 { 
-  DATA_START_ADDRESS = STORAGE_START_ADDRESS + dataAddress;
+//  STORAGE_START_ADDRESS = FLASH_START;
+  //DATA_START_ADDRESS = STORAGE_START_ADDRESS;
   _writeIndex = 0;
   _writeAddress = nullptr;
+  //flashPointer = 0;
   _sketchSize = 0;
   command=-1;
 #if defined(__SAM3X8E__)
@@ -264,11 +270,15 @@ int InternalStorageClass::open(int length, int8_t _command)
   command=_command;
   _writeIndex = 0;
   
-  if (command) _writeAddress = (addressData*)DATA_START_ADDRESS;
+switch (command)
+{
+    case DATA_SKETCH:
+    case DATA_FS:
+   _writeAddress = (addressData*)STORAGE_START_ADDRESS;
+break;
+}  
 
-  else        _writeAddress = (addressData*)STORAGE_START_ADDRESS;
-
-Serial.print("Open flash for write from ");
+Serial.print("Open flash from ");
 Serial.println( (uint32_t) _writeAddress,HEX);
 delay(300);
 #ifdef ARDUINO_ARCH_SAMD
@@ -329,9 +339,9 @@ return 1;
 void InternalStorageClass::close()  
 {
 #if defined(__SAM3X8E__)
-if (command)
-    _sketchSize = (uint32_t)_writeAddress-DATA_START_ADDRESS+_writeIndex;
-else 
+//if (command)
+//    _sketchSize = (uint32_t)_writeAddress-DATA_START_ADDRESS+_writeIndex;
+//else 
     _sketchSize = (uint32_t)_writeAddress-STORAGE_START_ADDRESS+_writeIndex;
 
 while (_writeIndex) write(0xff);  //Finish block
@@ -356,12 +366,12 @@ void InternalStorageClass::clear()
 void InternalStorageClass::apply()
 {
   //noInterrupts(); moved inside routine
-if (command) 
+if (command != DATA_SKETCH) 
     {
 //    Interrupts();
-    Serial.println("Config Data flashed. Rebooting");
-    delay(300);
-    NVIC_SystemReset();
+	Serial.println("Config Data flashed. Rebooting");
+	delay(300);
+	NVIC_SystemReset();
     return;
     }
 

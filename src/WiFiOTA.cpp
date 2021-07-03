@@ -72,14 +72,17 @@ WiFiOTAClass::WiFiOTAClass() :
 {
 }
 
-void WiFiOTAClass::begin(IPAddress& localIP, const char* name, const char* password, OTAStorage& storage)
+void WiFiOTAClass::begin(IPAddress& localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& BINConfig, seekableStream& JSONConfig)
 {
   localIp = localIP;
   _name = name;
   _expectedAuthorization = "Basic " + base64Encode("arduino:" + String(password));
   _storage = &storage;
+  _BINConfig=&BINConfig;
+  _JSONConfig=&JSONConfig;
 }
 
+#ifndef ARDUINO_OTA_MDNS_DISABLE
 void WiFiOTAClass::pollMdns(UDP &_mdnsSocket)
 {
   int packetLength = _mdnsSocket.parsePacket();
@@ -109,7 +112,6 @@ void WiFiOTAClass::pollMdns(UDP &_mdnsSocket)
     while (packetLength) {
       if (_mdnsSocket.available()) {
         packetLength--;
-        _mdnsSocket.read();
       }
     }
     return;
@@ -225,6 +227,32 @@ void WiFiOTAClass::pollMdns(UDP &_mdnsSocket)
 
   _mdnsSocket.endPacket();
 }
+#endif
+
+long  WiFiOTAClass::openStorage(Client& client, unsigned int contentLength, short dataType)
+{
+               switch (dataType)
+                {
+                case DATA_SKETCH: 
+                case DATA_FS:
+                if (_storage && _storage->open(contentLength, dataType)) return _storage->maxSize();
+                break;
+
+                case DATA_JSON_CONFIG:
+                if (_JSONConfig) {_JSONConfig->seek(); return _JSONConfig->getSize();} 
+                break;
+
+                case DATA_BIN_CONFIG:
+                if (_BINConfig) {_BINConfig->seek(); return _BINConfig->getSize();} 
+                break;
+                }
+
+  
+      flushRequestBody(client, contentLength);
+      sendHttpResponse(client, 500, "Internal Server Error");
+      return 0;
+}
+
 
 void WiFiOTAClass::pollServer(Client& client)
 {
@@ -274,15 +302,24 @@ void WiFiOTAClass::pollServer(Client& client)
     } else
 
     if (request == "POST /config HTTP/1.1") {
-      dataType = DATA_CONFIG;
+      dataType = DATA_JSON_CONFIG;
       isUpload = true;
     } else
 
     if (request == "GET /config HTTP/1.1") {
-      dataType = DATA_CONFIG;
+      dataType = DATA_JSON_CONFIG;
       isUpload = false;
     } else
     
+    if (request == "POST /binconfig HTTP/1.1") {
+      dataType = DATA_BIN_CONFIG;
+      isUpload = true;
+    } else
+
+    if (request == "GET /binconfig HTTP/1.1") {
+      dataType = DATA_BIN_CONFIG;
+      isUpload = false;
+    } else
 
     if (request == "POST /sketch HTTP/1.1") {
       dataType = DATA_SKETCH; 
@@ -308,18 +345,15 @@ void WiFiOTAClass::pollServer(Client& client)
       return;
     }
 
-    if (_storage == NULL || !_storage->open(contentLength, dataType)) {
-      flushRequestBody(client, contentLength);
-      sendHttpResponse(client, 500, "Internal Server Error");
-      return;
-    }
+    long maxSize=0;
+    if (!(maxSize=openStorage(client,contentLength,dataType))) return;
 
-    if (contentLength > _storage->maxSize()) {
+    if (contentLength > maxSize) {
       _storage->close();
       flushRequestBody(client, contentLength);
       sendHttpResponse(client, 413, "Payload Too Large");
       return;
-    }
+}
 
     long read = 0;
     byte buff[64];
@@ -328,14 +362,39 @@ void WiFiOTAClass::pollServer(Client& client)
           while (client.connected() && read < contentLength) {
             while (client.available()) {
               int l = client.read(buff, sizeof(buff));
-              for (int i = 0; i < l; i++) {
-                _storage->write(buff[i]);
-              }
-              read += l;
+               switch (dataType)
+                {
+                case DATA_SKETCH: 
+                case DATA_FS:
+                      for (int i = 0; i < l; i++) 
+                                _storage->write(buff[i]);
+                      read += l;
+ 
+                break;
+                case DATA_BIN_CONFIG:
+                      _BINConfig->write(buff,l);
+                      read += l;
+                break;
+
+                case DATA_JSON_CONFIG:
+                      _JSONConfig->write(buff,l);
+                      read += l;
+                break;
+
+                }
             }
           }
 
-          _storage->close();
+          switch (dataType)
+                {
+                case DATA_SKETCH: 
+                case DATA_FS:
+                  _storage->close();
+                break;
+                case DATA_JSON_CONFIG:
+                  _JSONConfig->write(255);
+                }  
+
 
           if (read == contentLength) 
           {
@@ -343,14 +402,20 @@ void WiFiOTAClass::pollServer(Client& client)
 
             delay(500);
 
-            if (beforeApplyCallback) {
-              beforeApplyCallback();
-            }
+            switch (dataType)
+                {
+                case DATA_SKETCH: 
+                case DATA_FS:
+                if (beforeApplyCallback) {
+                beforeApplyCallback();
+                 }
 
-            // apply the update
-            _storage->apply();
-            
-            while (true);
+                // apply the update
+                _storage->apply();
+                
+                while (true);
+                } 
+
           } 
           else 
           {
@@ -362,21 +427,46 @@ void WiFiOTAClass::pollServer(Client& client)
      }
     else //Download
      { 
-       //uint32_t dataLen = _storage->dataLen();
-       client.println("HTTP/1.1 200 OK");
-       //Server: nginx/0.6.31
-       client.println("Content-Type: text/json");//; charset=utf-8
-       //client.println("Content-Length: "+1234);
-       client.println("Connection: close\n");
-
        int16_t ch;
        uint32_t counter=0;
-       while ( client.connected() &&  counter<4096 && (ch = _storage->read()) >=0) 
+       
+       switch (dataType)
           {
-            counter++;
-            client.write(ch);
-          }
-      _storage->close(); 
+          case DATA_SKETCH:   
+            sendHttpResponse(client, 400, "Bad Request");
+            return;
+          case DATA_FS:
+            sendHttpContentHeader(client,"octet/stream");
+
+            while ( client.connected() &&  counter<4096 && (ch = _storage->read()) >=0) 
+                {
+                  counter++;
+                  client.write(ch);
+                }
+            _storage->close(); 
+            break;  
+          case DATA_JSON_CONFIG:
+            sendHttpContentHeader(client,"text/json");
+            if (!_JSONConfig) break;
+            _JSONConfig->seek();
+              while ( client.connected()  && (ch = _JSONConfig->read()) !=255) 
+                {
+                  counter++;
+                  client.write(ch);
+                }
+            
+            break;
+          case DATA_BIN_CONFIG:
+             sendHttpContentHeader(client,"octet/stream");
+             if (!_BINConfig) break;
+             _BINConfig->seek();
+              while ( client.connected() && counter<4096 && (ch = _BINConfig->read()) >=0) 
+                {
+                  counter++;
+                  client.write(ch);
+                }
+            
+        }
       client.stop();   
 
      } 
@@ -399,6 +489,19 @@ void WiFiOTAClass::sendHttpResponse(Client& client, int code, const char* status
   client.println();
   delay(500);
   client.stop();
+}
+
+void WiFiOTAClass::sendHttpContentHeader(Client& client, const char* content)
+{
+  while (client.available()) {
+    client.read();
+  }
+
+  client.println("HTTP/1.1 200 OK");
+  client.println("Connection: close");
+  client.print("Content-Type: ");
+  client.println(content);
+  client.println();
 }
 
 void WiFiOTAClass::flushRequestBody(Client& client, long contentLength)
