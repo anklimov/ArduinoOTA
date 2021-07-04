@@ -356,12 +356,17 @@ void WiFiOTAClass::pollServer(Client& client)
 }
 
     long read = 0;
+    #if defined(__SAM3X8E__)
+    uint8_t buff[1024];
+    #else
     byte buff[64];
+    #endif
+    
     if (isUpload)
     {
           while (client.connected() && read < contentLength) {
             while (client.available()) {
-              int l = client.read(buff, sizeof(buff));
+              size_t l = client.read(buff, sizeof(buff));
                switch (dataType)
                 {
                 case DATA_SKETCH: 
