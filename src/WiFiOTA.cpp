@@ -398,6 +398,11 @@ void WiFiOTAClass::pollServer(Client& client)
                 break;
                 case DATA_JSON_CONFIG:
                   _JSONConfig->write(255);
+                  _JSONConfig->flush();
+                break;  
+                case DATA_BIN_CONFIG:
+                  _BINConfig->flush();
+                  
                 }  
 
 
