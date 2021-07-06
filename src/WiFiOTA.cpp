@@ -442,24 +442,15 @@ void WiFiOTAClass::pollServer(Client& client)
        
        switch (dataType)
           {
-          case DATA_SKETCH:   
+          case DATA_SKETCH: 
+          case DATA_FS:  
             sendHttpResponse(client, 400, "Bad Request");
-            return;
-          case DATA_FS:
-            sendHttpContentHeader(client,"octet/stream");
-
-            while ( client.connected() &&  counter<4096 && (ch = _storage->read()) >=0) 
-                {
-                  counter++;
-                  client.write(ch);
-                }
-            _storage->close(); 
-            break;  
+            return; 
           case DATA_JSON_CONFIG:
             sendHttpContentHeader(client,"text/json");
             if (!_JSONConfig) break;
             _JSONConfig->seek();
-              while ( client.connected()  && (ch = _JSONConfig->read()) !=255) 
+              while ( client.connected()  && _JSONConfig->available() && (ch = _JSONConfig->read()) !=255) 
                 {
                   counter++;
                   client.write(ch);
@@ -470,7 +461,7 @@ void WiFiOTAClass::pollServer(Client& client)
              sendHttpContentHeader(client,"octet/stream");
              if (!_BINConfig) break;
              _BINConfig->seek();
-              while ( client.connected() && counter<4096 && (ch = _BINConfig->read()) >=0) 
+              while ( client.connected() && _JSONConfig->available() && (ch = _BINConfig->read()) >=0) 
                 {
                   counter++;
                   client.write(ch);
