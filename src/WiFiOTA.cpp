@@ -76,7 +76,7 @@ void WiFiOTAClass::begin(IPAddress& localIP, const char* name, const char* passw
 {
   localIp = localIP;
   _name = name;
-  _expectedAuthorization = "Basic " + base64Encode("arduino:" + String(password));
+  _expectedAuthorization = ("Basic ") + base64Encode("arduino:" + String(password));
   _storage = &storage;
   _BINConfig=&BINConfig;
   _JSONConfig=&JSONConfig;
@@ -249,7 +249,7 @@ long  WiFiOTAClass::openStorage(Client& client, unsigned int contentLength, shor
 
   
       flushRequestBody(client, contentLength);
-      sendHttpResponse(client, 500, "Internal Server Error");
+      sendHttpResponse(client, 500);
       return 0;
 }
 
@@ -269,11 +269,11 @@ void WiFiOTAClass::pollServer(Client& client)
       header = client.readStringUntil('\n');
       header.trim();
 
-      if (header.startsWith("Content-Length: ")) {
+      if (header.startsWith(F("Content-Length: "))) {
         header.remove(0, 16);
 
         contentLength = header.toInt();
-      } else if (header.startsWith("Authorization: ") || header.startsWith("authorization: ")) {
+      } else if (header.startsWith(F("Authorization: ")) || header.startsWith(F("authorization: "))) {
         header.remove(0, 15);
 
         authorization = header;
@@ -283,20 +283,41 @@ void WiFiOTAClass::pollServer(Client& client)
     int  dataType = -1;
     bool isUpload = true;
     int  retCode;
+    
+    bool authorized = (_expectedAuthorization == authorization);
 
-    if (_expectedAuthorization != authorization) {
-      flushRequestBody(client, contentLength);
-      //client.println("WWW-Authenticate: Basic realm=\"Access restricted\"");
-      sendHttpResponse(client, 401, "Unauthorized");
-      return;
-    }
+    //remove HTTP/1.1
+        int pos=request.lastIndexOf(' ');
+        if (pos)
+            request.remove(pos,request.length()-pos);    
 
-    if (request == "POST /data HTTP/1.1") {
+    String URI;
+    if (request.startsWith(F("POST"))) 
+                  {
+                    isUpload = true;
+                    URI=request;
+                    URI.remove(0,5);
+                  }
+    else if (request.startsWith(F("GET")))       
+                  {
+                    isUpload = false; 
+                    URI=request;
+                    URI.remove(0,4);
+                  } 
+    else 
+                  {
+                  flushRequestBody(client, contentLength);
+                  sendHttpResponse(client, 400);
+                  return;
+                  }         
+
+   /* 
+    if (request == F("POST /data HTTP/1.1")) {
       dataType = DATA_FS;
       isUpload = true;
     } else
 
-    if (request == "GET /data HTTP/1.1") {
+    if (request == F("GET /data HTTP/1.1")) {
       dataType = DATA_FS;
       isUpload=false;
     } else
@@ -325,23 +346,40 @@ void WiFiOTAClass::pollServer(Client& client)
       dataType = DATA_SKETCH; 
       isUpload = true;
     } else
+  */
 
-    if (processCustomRequest && (retCode = processCustomRequest(client,request,contentLength))>0)
+
+    if (URI == "/binconfig") 
+      dataType = DATA_BIN_CONFIG;
+    else if (URI == "/config") 
+      dataType = DATA_JSON_CONFIG;
+    else if (URI == "/sketch") 
+      dataType = DATA_SKETCH; 
+    else if (URI == "/data") 
+      dataType = DATA_FS;
+    else 
+    if (processCustomRequest && (retCode = processCustomRequest(client,request,contentLength,authorized))>0)
     {
-      client.stop();
+      if (retCode>=400)
+          sendHttpResponse(client, retCode);
+      else client.stop();
       return;
     } else
 
     {
       flushRequestBody(client, contentLength);
-      sendHttpResponse(client, 404, "Not Found");
+      sendHttpResponse(client, 404);
       return;
     }
 
-
+    if (!authorized) {
+      flushRequestBody(client, contentLength);
+      sendHttpResponse(client, 401);
+      return;
+    }
 
     if (isUpload && contentLength <= 0) {
-      sendHttpResponse(client, 400, "Bad Request");
+      sendHttpResponse(client, 400);
       return;
     }
 
@@ -351,7 +389,7 @@ void WiFiOTAClass::pollServer(Client& client)
     if (contentLength > maxSize) {
       _storage->close();
       flushRequestBody(client, contentLength);
-      sendHttpResponse(client, 413, "Payload Too Large");
+      sendHttpResponse(client, 413);
       return;
 }
 
@@ -408,7 +446,7 @@ void WiFiOTAClass::pollServer(Client& client)
 
           if (read == contentLength) 
           {
-            sendHttpResponse(client, 200, "OK");
+            sendHttpResponse(client, 200);
 
             delay(500);
 
@@ -429,7 +467,7 @@ void WiFiOTAClass::pollServer(Client& client)
           } 
           else 
           {
-          sendHttpResponse(client, 414, "Payload size wrong");
+          sendHttpResponse(client, 414);
           _storage->clear();
           delay(500);
           client.stop();
@@ -444,7 +482,7 @@ void WiFiOTAClass::pollServer(Client& client)
           {
           case DATA_SKETCH: 
           case DATA_FS:  
-            sendHttpResponse(client, 400, "Bad Request");
+            sendHttpResponse(client, 400);
             return; 
           case DATA_JSON_CONFIG:
             sendHttpContentHeader(client,"text/json");
@@ -482,13 +520,31 @@ void WiFiOTAClass::sendHttpResponse(Client& client, int code, const char* status
     client.read();
   }
 
-  client.print("HTTP/1.1 ");
+  client.print(F("HTTP/1.1 "));
   client.print(code);
-  client.print(" ");
-  client.println(status);
-  client.println("Connection: close");
+  client.print(F(" "));
+  if (status) 
+      client.println(status);
+  else switch (code)
+  {
+      case 400: client.println(F("Bad request"));
+      break;
+      case 414: client.println(F("Payload size wrong"));
+      break;
+      case 401: client.println(F("Unauthorized"));
+                client.println(F("WWW-Authenticate: Basic realm=\"Access restricted\""));
+      break;
+      case 404: client.println(F("Not found"));
+      break;
+      case 413: client.println(F("Payload Too Large"));
+      break;
+      case 500: client.println(F("Internal Server Error"));
+      break;
+      case 200: client.println(F("OK"));
+  }
+  client.println(F("Connection: close"));
   client.println();
-  delay(500);
+  delay(100);
   client.stop();
 }
 
@@ -498,9 +554,9 @@ void WiFiOTAClass::sendHttpContentHeader(Client& client, const char* content)
     client.read();
   }
 
-  client.println("HTTP/1.1 200 OK");
-  client.println("Connection: close");
-  client.print("Content-Type: ");
+  client.println(F("HTTP/1.1 200 OK"));
+  client.println(F("Connection: close"));
+  client.print(F("Content-Type: "));
   client.println(content);
   client.println();
 }

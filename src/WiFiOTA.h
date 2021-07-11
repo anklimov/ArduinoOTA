@@ -52,7 +52,7 @@ protected:
   void pollServer(Client& client);
 
 public:
-  void setCustomHandler(int (*fn)(Client& client, String request, long contentLength))
+  void setCustomHandler(int (*fn)(Client& client, String request, long contentLength, bool authorized))
   {
     processCustomRequest = fn;
   }
@@ -67,7 +67,7 @@ public:
   }
 
 private:
-  void sendHttpResponse(Client& client, int code, const char* status);
+  void sendHttpResponse(Client& client, int code, const char* status = NULL);
   void sendHttpContentHeader(Client& client, const char* content);
   void flushRequestBody(Client& client, long contentLength);
   long  openStorage(Client& client, unsigned int contentLength, short dataType);
@@ -83,7 +83,7 @@ private:
   uint32_t _lastMdnsResponseTime;
   
   void (*beforeApplyCallback)(void);
-  int (*processCustomRequest)(Client& client, String request, long contentLength);
+  int (*processCustomRequest)(Client& client, String request, long contentLength, bool authorized);
 };
 
 #endif
