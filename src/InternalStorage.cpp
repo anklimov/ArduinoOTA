@@ -99,7 +99,7 @@ extern "C" {
 #elif defined(__SAM3X8E__)
 
     //Erase secondary bank;
-    Serial.println("Erase flash");
+    Serial.println(F("Erase flash"));
     flash_erase_all(address); 
 #endif    
   }
@@ -159,13 +159,13 @@ uint32_t *p_dest;
 int32_t  left;
 
 
-Serial.print("Flashing firmware:");
+Serial.print(F("Flashing firmware:"));
 Serial.println(length);
-Serial.print("From:");
+Serial.print(F("From:"));
 Serial.println(src,HEX);
-Serial.print("To:");
+Serial.print(F("To:"));
 Serial.println(dest,HEX);
-Serial.print("PageSize:");
+Serial.print(F("PageSize:"));
 Serial.println(pageSize);
 
 
@@ -278,7 +278,7 @@ switch (command)
 break;
 }  
 
-Serial.print("Open flash from ");
+Serial.print(F("Open flash from "));
 Serial.println( (uint32_t) _writeAddress,HEX);
 delay(300);
 #ifdef ARDUINO_ARCH_SAMD
@@ -290,7 +290,7 @@ delay(300);
 
  int retCode = flash_unlock((uint32_t)STORAGE_START_ADDRESS, (uint32_t) STORAGE_START_ADDRESS + MAX_PARTIONED_SKETCH_SIZE - 1, 0, 0);
   if (retCode != FLASH_RC_OK) {
-    Serial.println("Failed to unlock flash for write\n");
+    Serial.println(F("Failed to unlock flash for write\n"));
     }
 #endif
 
@@ -316,7 +316,7 @@ size_t InternalStorageClass::write(uint8_t b)
     int retCode = flash_write((uint32_t) _writeAddress, &_addressData, IFLASH0_PAGE_SIZE, 0); //1?
     if (retCode != FLASH_RC_OK) 
 		{
-		Serial.println("Flash write failed\n");
+		Serial.println(F("Flash write failed\n"));
                 return 0;
                 }
     _writeAddress++;
@@ -346,7 +346,7 @@ void InternalStorageClass::close()
 
 while (_writeIndex) write(0xff);  //Finish block
 
-Serial.print("\nReceived bytes:");
+Serial.print(F("\nReceived bytes:"));
 Serial.println(_sketchSize);
 delay(300);
 #else 
@@ -369,7 +369,7 @@ void InternalStorageClass::apply()
 if (command != DATA_SKETCH) 
     {
 //    Interrupts();
-	Serial.println("Config Data flashed. Rebooting");
+	Serial.println(F("Config Data flashed. Rebooting"));
 	delay(300);
 	NVIC_SystemReset();
     return;
