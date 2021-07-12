@@ -27,39 +27,47 @@
 
 #define BOARD "arduino"
 #define BOARD_LENGTH (sizeof(BOARD) - 1)
+const char CODES[] PROGMEM = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
 
 static String base64Encode(const String& in)
 {
-  static const char* CODES = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
-
   int b;
   String out;
   out.reserve((in.length()) * 4 / 3);
   
   for (unsigned int i = 0; i < in.length(); i += 3) {
     b = (in.charAt(i) & 0xFC) >> 2;
-    out += CODES[b];
+    //out += CODES[b];
+    out += (char) pgm_read_byte_near(&CODES[b]);
 
     b = (in.charAt(i) & 0x03) << 4;
     if (i + 1 < in.length()) {
       b |= (in.charAt(i + 1) & 0xF0) >> 4;
-      out += CODES[b];
+      //out += CODES[b];
+      out += (char) pgm_read_byte_near(&CODES[b]);
+
       b = (in.charAt(i + 1) & 0x0F) << 2;
       if (i + 2 < in.length()) {
          b |= (in.charAt(i + 2) & 0xC0) >> 6;
-         out += CODES[b];
+         //out += CODES[b];
+         out += (char) pgm_read_byte_near(&CODES[b]);
+
          b = in.charAt(i + 2) & 0x3F;
-         out += CODES[b];
+         //out += CODES[b];
+         out += (char) pgm_read_byte_near(&CODES[b]);
+
       } else {
-        out += CODES[b];
+        //out += CODES[b];
+        out += (char) pgm_read_byte_near(&CODES[b]);
         out += '=';
       }
     } else {
-      out += CODES[b];
+      //out += CODES[b];
+      out += (char) pgm_read_byte_near(&CODES[b]);
       out += "==";
     }
   }
-
+  Serial.println(out);
   return out;
 }
 
