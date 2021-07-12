@@ -67,7 +67,6 @@ static String base64Encode(const String& in)
       out += "==";
     }
   }
-  Serial.println(out);
   return out;
 }
 
