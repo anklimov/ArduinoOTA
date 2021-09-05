@@ -506,7 +506,7 @@ void WiFiOTAClass::pollServer(Client& client)
              sendHttpContentHeader(client,"octet/stream");
              if (!_BINConfig) break;
              _BINConfig->seek();
-              while ( client.connected() && _JSONConfig->available() && (ch = _BINConfig->read()) >=0) 
+              while ( client.connected() && _BINConfig->available() && (ch = _BINConfig->read()) >=0) 
                 {
                   counter++;
                   client.write(ch);
