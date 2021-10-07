@@ -264,7 +264,7 @@ long  WiFiOTAClass::openStorage(String fileName, long  contentLength, char mode,
 
 void WiFiOTAClass::closeStorage(uint16_t dataType)
   {
-  switch (dataType)
+  switch (dataType & 0xF)
         {
         case DATA_SKETCH: 
         case DATA_FS:
@@ -392,8 +392,8 @@ void WiFiOTAClass::pollServer(Client& client)
             return;
           }
 
-    Serial.print("Opened DT ");
-    Serial.println(dataType,HEX);
+    //Serial.print("Opened DT ");
+    //Serial.println(dataType,HEX);
 
     if ((method == HTTP_POST) && contentLength <= 0) {
       sendHttpResponse(client, 400);
@@ -432,7 +432,7 @@ void WiFiOTAClass::pollServer(Client& client)
                 break;
                 case DATA_FILE:
                       _file->write(buff,l);
-                      Serial.write(buff,l);
+             //         Serial.write(buff,l);
                       read += l;
                 break;
 
@@ -495,13 +495,13 @@ void WiFiOTAClass::pollServer(Client& client)
                   if (i==sizeof(buff))
                               {
                                 client.write(buff,i);
-                                Serial.write(buff,i);
+             //                   Serial.write(buff,i);
                                 i=0;
                               }
                   
                 }
              if (client.connected() && i) client.write(buff,i);
-             Serial.write(buff,i);
+             //Serial.write(buff,i);
             break;
           
         }
@@ -526,8 +526,7 @@ void WiFiOTAClass::sendHttpResponseWithText(Client& client, uint16_t code,  bool
   }
   uint16_t  httpRetCode     = code & 0xFFF;
   uint16_t contentTypeCode = code & 0xF000; 
-
-  client.print(F("HTTP/1.1 "));
+    client.print(F("HTTP/1.1 "));
   client.print(httpRetCode);
   client.print(F(" "));
 
@@ -549,36 +548,35 @@ void WiFiOTAClass::sendHttpResponseWithText(Client& client, uint16_t code,  bool
       case 301: client.println(F("Moved permanently"));
       break;
       case 200: client.println(F("OK"));
+      break;
       default:
-      client.println(F("Error"));
+      client.println(F("Unknown"));
   }
-  client.println(F("Connection: close"));
-  
-  if (contentTypeCode)
-  {
-  client.print(F("Content-Type: "));
-  switch (contentTypeCode) {
-    case HTTP_TEXT_PLAIN: client.println(F("text/plain"));
-    break;
-    case HTTP_TEXT_JSON:  client.println(F("text/json"));
-    break;
-    case HTTP_TEXT_HTML: client.println(F("text/html"));
-    break;
-    case HTTP_IMAGE_GIF:  client.println(F("image/gif"));
-    break;
-    case HTTP_IMAGE_JPEG:  client.println(F("image/jpeg"));
-    break;
-    default:
-    client.println(F("octet/stream"));
-  }
-  }
-          
+         
   #ifdef CORS
   client.print(F("Access-Control-Allow-Origin: "));
   client.println(F(CORS));
   #endif
-          
- 
+
+    if (contentTypeCode)
+    {
+    client.println(F("Connection: close"));  
+    client.print(F("Content-Type: "));
+    switch (contentTypeCode) {
+      case HTTP_TEXT_PLAIN: client.println(F("text/plain"));
+      break;
+      case HTTP_TEXT_JSON:  client.println(F("text/json"));
+      break;
+      case HTTP_TEXT_HTML: client.println(F("text/html"));
+      break;
+      case HTTP_IMAGE_GIF:  client.println(F("image/gif"));
+      break;
+      case HTTP_IMAGE_JPEG:  client.println(F("image/jpeg"));
+      break;
+      default:
+      client.println(F("octet/stream"));
+    }
+  }
 
   if (response!="") 
           {
@@ -586,7 +584,8 @@ void WiFiOTAClass::sendHttpResponseWithText(Client& client, uint16_t code,  bool
           client.print(response);
           if (closeSocket) {delay(100);client.stop();}
           }
-  else  if (closeSocket) 
+  else  
+  if (closeSocket) 
           {
           client.println();
           delay(100);
