@@ -38,6 +38,13 @@ SDStorageClass SDStorage;
 SerialFlashStorageClass SerialFlashStorage;
 #endif
 
+#include "seekablestream.h"
+
+//#define HTTP_TEXT_PLAIN   0x0100
+//#define HTTP_TEXT_JSON    0x0200
+//#define HTTP_OCTET_STREAM 0x0300
+
+
 const uint16_t OTA_PORT = 65280;
 
 template <class NetServer, class NetClient>
@@ -51,8 +58,8 @@ public:
 	    {
 	    };
 
-  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& BINConfig = NULL, seekableStream& JSONConfig=NULL ) {
-    WiFiOTAClass::begin(localIP, name, password, storage, BINConfig, JSONConfig);
+  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& file = NULL) {
+    WiFiOTAClass::begin(localIP, name, password, storage, file);
     server.begin();
   }
 
@@ -86,8 +93,8 @@ private:
 public:
   ArduinoOTAMdnsClass() {};
 
-  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& BINConfig = NULL, seekableStream& JSONConfig=NULL) {
-    ArduinoOTAClass<NetServer, NetClient>::begin(localIP, name, password, storage, BINConfig, JSONConfig);
+  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& file = NULL) {
+    ArduinoOTAClass<NetServer, NetClient>::begin(localIP, name, password, storage, file);
 #if defined(ESP8266) && !(defined(ethernet_h_) || defined(ethernet_h) || defined(UIPETHERNET_H))
     mdnsSocket.beginMulticast(localIP, IPAddress(224, 0, 0, 251), 5353);
 #else

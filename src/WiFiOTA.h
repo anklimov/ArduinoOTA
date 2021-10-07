@@ -22,10 +22,24 @@
 */
 
 
-#define DATA_SKETCH 0
-#define DATA_FS 1 // JFFS ESP only 
-#define DATA_JSON_CONFIG 2
-#define DATA_BIN_CONFIG  3
+#define DATA_SKETCH      0
+#define DATA_FS          1 // JFFS ESP only 
+#define DATA_FILE        2
+#define DATA_UNKNOWN     0xF
+
+#define HTTP_TEXT_PLAIN   0x1000
+#define HTTP_TEXT_JSON    0x2000
+#define HTTP_OCTET_STREAM 0x3000
+#define HTTP_TEXT_HTML    0x4000
+#define HTTP_IMAGE_GIF    0x5000
+#define HTTP_IMAGE_JPEG   0x6000
+
+#define HTTP_POST   1
+#define HTTP_GET    2
+#define HTTP_DELETE 3
+#define HTTP_PUT    4
+
+
 
 #ifndef _WIFI_OTA_H_INCLUDED
 #define _WIFI_OTA_H_INCLUDED
@@ -35,7 +49,7 @@
 #include <Client.h>
 #include <IPAddress.h>
 #include <Udp.h>
-#include "flashstream.h"
+#include "seekablestream.h"
 
 #include "OTAStorage.h"
 
@@ -43,7 +57,7 @@ class WiFiOTAClass {
 protected:
   WiFiOTAClass();
 
-  void begin(IPAddress& localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& BINConfig, seekableStream& JSONConfig);
+  void begin(IPAddress& localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& cstream);
 
 #ifndef DISABLE_ARDUINO_OTA_MDNS
   void pollMdns(UDP &mdnsSocket);
@@ -52,7 +66,7 @@ protected:
   void pollServer(Client& client);
 
 public:
-  void setCustomHandler(int (*fn)(Client& client, String request, long contentLength, bool authorized))
+  void setCustomHandler(uint16_t (*fn)(Client& client, String request, long contentLength, bool authorized, String& response))
   {
     processCustomRequest = fn;
   }
@@ -65,25 +79,26 @@ public:
   {
     _name = name;
   }
+  void sendHttpResponse(Client& client, uint16_t code, bool closeSocket = true);
+  void sendHttpResponseWithText(Client& client, uint16_t code, bool closeSocket, String& response);
 
 private:
-  void sendHttpResponse(Client& client, int code, const char* status = NULL);
-  void sendHttpContentHeader(Client& client, const char* content);
   void flushRequestBody(Client& client, long contentLength);
-  long  openStorage(Client& client, unsigned int contentLength, short dataType);
+  long openStorage(String fileName,long contentLength, char mode, uint16_t * dataType);
+  void closeStorage(uint16_t dataType);
 
 private:
   String _name;
   String _expectedAuthorization;
   OTAStorage* _storage;
-  seekableStream* _JSONConfig;
-  seekableStream* _BINConfig;
+ 
+  seekableStream* _file;
   
   uint32_t localIp;
   uint32_t _lastMdnsResponseTime;
-  
+
   void (*beforeApplyCallback)(void);
-  int (*processCustomRequest)(Client& client, String request, long contentLength, bool authorized);
+  uint16_t (*processCustomRequest)(Client& client, String request, long contentLength, bool authorized, String& response);
 };
 
 #endif

@@ -79,14 +79,13 @@ WiFiOTAClass::WiFiOTAClass() :
 {
 }
 
-void WiFiOTAClass::begin(IPAddress& localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& BINConfig, seekableStream& JSONConfig)
+void WiFiOTAClass::begin(IPAddress& localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& cstream)
 {
   localIp = localIP;
   _name = name;
   _expectedAuthorization = ("Basic ") + base64Encode("arduino:" + String(password));
   _storage = &storage;
-  _BINConfig=&BINConfig;
-  _JSONConfig=&JSONConfig;
+  _file=&cstream;
 }
 
 #ifndef ARDUINO_OTA_MDNS_DISABLE
@@ -236,29 +235,47 @@ void WiFiOTAClass::pollMdns(UDP &_mdnsSocket)
 }
 #endif
 
-long  WiFiOTAClass::openStorage(Client& client, unsigned int contentLength, short dataType)
+long  WiFiOTAClass::openStorage(String fileName, long  contentLength, char mode, uint16_t * dataType)
 {
-               switch (dataType)
-                {
-                case DATA_SKETCH: 
-                case DATA_FS:
-                if (_storage && _storage->open(contentLength, dataType)) return _storage->maxSize();
-                break;
+         if (fileName == "/sketch" && mode == 'w')
+              { 
+                if (dataType) *dataType = DATA_SKETCH;
+                if (_storage && _storage->open(contentLength, DATA_SKETCH)) 
+                        return _storage->maxSize(); else return 0;
+              }
 
-                case DATA_JSON_CONFIG:
-                if (_JSONConfig) {_JSONConfig->seek(); return _JSONConfig->getSize();} 
-                break;
+         else if (fileName == "/data" && mode == 'w')    
+              {
+                if (dataType) *dataType = DATA_FS;
+                if (_storage && _storage->open(contentLength, DATA_FS)) 
+                        return _storage->maxSize(); else return 0;
+                
+              } 
 
-                case DATA_BIN_CONFIG:
-                if (_BINConfig) {_BINConfig->seek(); return _BINConfig->getSize();} 
-                break;
-                }
-
-  
-      flushRequestBody(client, contentLength);
-      sendHttpResponse(client, 500);
-      return 0;
+         else {
+               if (_file && _file->open(fileName,mode)) 
+                        {
+                        if (dataType) *dataType = DATA_FILE | _file->getContentType();   
+                        return _file->getSize();
+                         } else return -1;
+              } 
+        
 }
+
+void WiFiOTAClass::closeStorage(uint16_t dataType)
+  {
+  switch (dataType)
+        {
+        case DATA_SKETCH: 
+        case DATA_FS:
+          _storage->close();
+        break;
+        case DATA_FILE:
+          _file->putEOF();
+          _file->close();
+        break;                  
+        }  
+  }
 
 
 void WiFiOTAClass::pollServer(Client& client)
@@ -271,6 +288,7 @@ void WiFiOTAClass::pollServer(Client& client)
     String header;
     long contentLength = -1;
     String authorization;
+    String response;
 
     do {
       header = client.readStringUntil('\n');
@@ -287,10 +305,7 @@ void WiFiOTAClass::pollServer(Client& client)
       }
     } while (header != "");
 
-    int  dataType = -1;
-    bool isUpload = true;
-    int  retCode;
-    
+    uint16_t  retCode;
     bool authorized = (_expectedAuthorization == authorization);
 
     //remove HTTP/1.1
@@ -298,107 +313,100 @@ void WiFiOTAClass::pollServer(Client& client)
         if (pos)
             request.remove(pos,request.length()-pos);    
 
+            
+   // Check custom handler
+   if (processCustomRequest && (retCode = processCustomRequest(client,request,contentLength,authorized, response)))
+    {
+      if (retCode == 1)
+          {
+          client.stop();
+          return;
+          }
+      else 
+          {
+          sendHttpResponseWithText(client, retCode, true, response);    
+          return;
+          }  
+    }
+    else if (!authorized) {
+      flushRequestBody(client, contentLength);
+      sendHttpResponse(client, 401);
+      return;
+    }
+    else // Authorized local operation
+    { 
     String URI;
+    uint16_t  dataType = DATA_UNKNOWN;
+    uint8_t method = 0;
+    long maxSize;
+    char mode = '\0';
+
+
     if (request.startsWith(F("POST"))) 
                   {
-                    isUpload = true;
+                    method = HTTP_POST;
                     URI=request;
                     URI.remove(0,5);
+                    mode = 'w';
                   }
     else if (request.startsWith(F("GET")))       
                   {
-                    isUpload = false; 
+                    method = HTTP_GET; 
                     URI=request;
                     URI.remove(0,4);
+                    mode = 'r';
                   } 
+    else if (request.startsWith(F("PUT")))       
+                  {
+                    method = HTTP_PUT; 
+                    URI=request;
+                    URI.remove(0,4);
+                    mode = 'w';
+                  }   
+     else if (request.startsWith(F("DELETE")))       
+                  {
+                    method = HTTP_DELETE; 
+                    URI=request;
+                    URI.remove(0,7);
+                  }               
+
     else 
                   {
                   flushRequestBody(client, contentLength);
                   sendHttpResponse(client, 400);
                   return;
-                  }         
-
-   /* 
-    if (request == F("POST /data HTTP/1.1")) {
-      dataType = DATA_FS;
-      isUpload = true;
-    } else
-
-    if (request == F("GET /data HTTP/1.1")) {
-      dataType = DATA_FS;
-      isUpload=false;
-    } else
-
-    if (request == "POST /config HTTP/1.1") {
-      dataType = DATA_JSON_CONFIG;
-      isUpload = true;
-    } else
-
-    if (request == "GET /config HTTP/1.1") {
-      dataType = DATA_JSON_CONFIG;
-      isUpload = false;
-    } else
-    
-    if (request == "POST /binconfig HTTP/1.1") {
-      dataType = DATA_BIN_CONFIG;
-      isUpload = true;
-    } else
-
-    if (request == "GET /binconfig HTTP/1.1") {
-      dataType = DATA_BIN_CONFIG;
-      isUpload = false;
-    } else
-
-    if (request == "POST /sketch HTTP/1.1") {
-      dataType = DATA_SKETCH; 
-      isUpload = true;
-    } else
-  */
+                  } 
 
 
-    if (URI == "/binconfig") 
-      dataType = DATA_BIN_CONFIG;
-    else if (URI == "/config") 
-      dataType = DATA_JSON_CONFIG;
-    else if (URI == "/sketch") 
-      dataType = DATA_SKETCH; 
-    else if (URI == "/data") 
-      dataType = DATA_FS;
-    else 
-    if (processCustomRequest && (retCode = processCustomRequest(client,request,contentLength,authorized))>0)
-    {
-      if (retCode>=400)
-          sendHttpResponse(client, retCode);
-      else client.stop();
-      return;
-    } else
+    if (!(maxSize=openStorage(URI, contentLength,mode,&dataType))) 
+          {
+            flushRequestBody(client, contentLength);
+            sendHttpResponse(client, 500);
+            return;
+          }       
 
-    {
-      flushRequestBody(client, contentLength);
-      sendHttpResponse(client, 404);
-      return;
-    }
+    else if (maxSize == -1)
+          {
+            flushRequestBody(client, contentLength);
+            sendHttpResponse(client, 404);
+            return;
+          }
 
-    if (!authorized) {
-      flushRequestBody(client, contentLength);
-      sendHttpResponse(client, 401);
-      return;
-    }
+    Serial.print("Opened DT ");
+    Serial.println(dataType,HEX);
 
-    if (isUpload && contentLength <= 0) {
+    if ((method == HTTP_POST) && contentLength <= 0) {
       sendHttpResponse(client, 400);
       return;
     }
 
-    long maxSize=0;
-    if (!(maxSize=openStorage(client,contentLength,dataType))) return;
 
     if (contentLength > maxSize) {
-      _storage->close();
+      closeStorage(dataType);
       flushRequestBody(client, contentLength);
       sendHttpResponse(client, 413);
       return;
-}
+    }
 
     long read = 0;
     #if defined(__SAM3X8E__)
@@ -407,12 +415,13 @@ void WiFiOTAClass::pollServer(Client& client)
     byte buff[64];
     #endif
     
-    if (isUpload)
+    if (method == HTTP_POST)
     {
           while (client.connected() && read < contentLength) {
             while (client.available()) {
               size_t l = client.read(buff, sizeof(buff));
-               switch (dataType)
+              
+               switch (dataType  & 0xF)
                 {
                 case DATA_SKETCH: 
                 case DATA_FS:
@@ -421,35 +430,16 @@ void WiFiOTAClass::pollServer(Client& client)
                       read += l;
  
                 break;
-                case DATA_BIN_CONFIG:
-                      _BINConfig->write(buff,l);
-                      read += l;
-                break;
-
-                case DATA_JSON_CONFIG:
-                      _JSONConfig->write(buff,l);
+                case DATA_FILE:
+                      _file->write(buff,l);
+                      Serial.write(buff,l);
                       read += l;
                 break;
 
                 }
             }
           }
-
-          switch (dataType)
-                {
-                case DATA_SKETCH: 
-                case DATA_FS:
-                  _storage->close();
-                break;
-                case DATA_JSON_CONFIG:
-                  _JSONConfig->write(255);
-                  _JSONConfig->flush();
-                break;  
-                case DATA_BIN_CONFIG:
-                  _BINConfig->flush();
-                  
-                }  
-
+          closeStorage(dataType);
 
           if (read == contentLength) 
           {
@@ -457,7 +447,7 @@ void WiFiOTAClass::pollServer(Client& client)
 
             delay(500);
 
-            switch (dataType)
+            switch (dataType & 0xF)
                 {
                 case DATA_SKETCH: 
                 case DATA_FS:
@@ -470,83 +460,78 @@ void WiFiOTAClass::pollServer(Client& client)
                 
                 while (true);
                 } 
-
           } 
           else 
           {
           sendHttpResponse(client, 414);
           _storage->clear();
-          delay(500);
+          delay(100);
           client.stop();
           }        
      }
-    else //Download
+    else if (method == HTTP_GET)//Download
      { 
        int16_t ch;
        uint32_t counter=0;
        uint16_t i=0;
        
-       switch (dataType)
+       switch (dataType & 0xF)
           {
           case DATA_SKETCH: 
           case DATA_FS:  
             sendHttpResponse(client, 400);
             return; 
-          case DATA_JSON_CONFIG:
-            sendHttpContentHeader(client,"text/json");
-            if (!_JSONConfig) break;
-            _JSONConfig->seek();
-              while ( client.connected()  && _JSONConfig->available() && (ch = _JSONConfig->read()) !=255) 
+          case DATA_FILE: 
+            sendHttpResponse(client,200 | (dataType & 0xF000),false);
+            client.println();
+           // if (!_file) break;
+           // _file->seek();
+              while ( client.connected()  && _file->available() ) 
                 {
+                  ch = _file->read();
+
                   counter++;
                   buff[i++]=ch;
                   if (i==sizeof(buff))
                               {
                                 client.write(buff,i);
+                                Serial.write(buff,i);
                                 i=0;
                               }
                   
                 }
              if (client.connected() && i) client.write(buff,i);
+             Serial.write(buff,i);
             break;
-          case DATA_BIN_CONFIG:
-             sendHttpContentHeader(client,"octet/stream");
-             if (!_BINConfig) break;
-             _BINConfig->seek();
-              while ( client.connected() && _BINConfig->available() && (ch = _BINConfig->read()) >=0) 
-                {
-                  counter++;
-                  buff[i++]=ch;
-                  if (i==sizeof(buff))
-                              {
-                                client.write(buff,i);
-                                i=0;
-                              }
-                  
-                }
-             if (client.connected() && i) client.write(buff,i);
-            
+          
         }
       client.stop();   
 
-     } 
-
-
+     } //download
+     else sendHttpResponse(client, 400);
+    } //Authorized local operation
   }
 }
 
-void WiFiOTAClass::sendHttpResponse(Client& client, int code, const char* status)
+void WiFiOTAClass::sendHttpResponse(Client& client, uint16_t code,  bool closeSocket)
+{
+String nullstr="";  
+sendHttpResponseWithText(client,code,closeSocket,nullstr);
+}
+
+void WiFiOTAClass::sendHttpResponseWithText(Client& client, uint16_t code,  bool closeSocket, String& response)
 {
   while (client.available()) {
     client.read();
   }
+  uint16_t  httpRetCode     = code & 0xFFF;
+  uint16_t contentTypeCode = code & 0xF000; 
 
   client.print(F("HTTP/1.1 "));
-  client.print(code);
+  client.print(httpRetCode);
   client.print(F(" "));
-  if (status) 
-      client.println(status);
-  else switch (code)
+
+  switch (httpRetCode)
   {
       case 400: client.println(F("Bad request"));
       break;
@@ -561,25 +546,52 @@ void WiFiOTAClass::sendHttpResponse(Client& client, int code, const char* status
       break;
       case 500: client.println(F("Internal Server Error"));
       break;
+      case 301: client.println(F("Moved permanently"));
+      break;
       case 200: client.println(F("OK"));
+      default:
+      client.println(F("Error"));
   }
   client.println(F("Connection: close"));
-  client.println();
-  delay(100);
-  client.stop();
-}
-
-void WiFiOTAClass::sendHttpContentHeader(Client& client, const char* content)
-{
-  while (client.available()) {
-    client.read();
-  }
-
-  client.println(F("HTTP/1.1 200 OK"));
-  client.println(F("Connection: close"));
+  
+  if (contentTypeCode)
+  {
   client.print(F("Content-Type: "));
-  client.println(content);
-  client.println();
+  switch (contentTypeCode) {
+    case HTTP_TEXT_PLAIN: client.println(F("text/plain"));
+    break;
+    case HTTP_TEXT_JSON:  client.println(F("text/json"));
+    break;
+    case HTTP_TEXT_HTML: client.println(F("text/html"));
+    break;
+    case HTTP_IMAGE_GIF:  client.println(F("image/gif"));
+    break;
+    case HTTP_IMAGE_JPEG:  client.println(F("image/jpeg"));
+    break;
+    default:
+    client.println(F("octet/stream"));
+  }
+  }
+          
+  #ifdef CORS
+  client.print(F("Access-Control-Allow-Origin: "));
+  client.println(F(CORS));
+  #endif
+          
+ 
+
+  if (response!="") 
+          {
+          client.println();  
+          client.print(response);
+          if (closeSocket) {delay(100);client.stop();}
+          }
+  else  if (closeSocket) 
+          {
+          client.println();
+          delay(100);
+          client.stop();
+          }
 }
 
 void WiFiOTAClass::flushRequestBody(Client& client, long contentLength)
