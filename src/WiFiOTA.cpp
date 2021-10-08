@@ -235,8 +235,9 @@ void WiFiOTAClass::pollMdns(UDP &_mdnsSocket)
 }
 #endif
 
-long  WiFiOTAClass::openStorage(String fileName, long  contentLength, char mode, uint16_t * dataType)
-{
+long  WiFiOTAClass::openStorage(String fileName, long  contentLength, char mode, uint16_t * dataType, bool isAuthorized)
+{        
+         if (!isAuthorized && mode =='w') return -2;
          if (fileName == "/sketch" && mode == 'w')
               { 
                 if (dataType) *dataType = DATA_SKETCH;
@@ -253,6 +254,7 @@ long  WiFiOTAClass::openStorage(String fileName, long  contentLength, char mode,
               } 
 
          else {
+               if (_file && !_file->checkPermissions(fileName,mode,isAuthorized)) return -2;
                if (_file && _file->open(fileName,mode)) 
                         {
                         if (dataType) *dataType = DATA_FILE | _file->getContentType();   
@@ -289,6 +291,9 @@ void WiFiOTAClass::pollServer(Client& client)
     long contentLength = -1;
     String authorization;
     String response;
+    uint8_t method = 0;
+    char mode = '\0';
+    //String URI;
 
     do {
       header = client.readStringUntil('\n');
@@ -313,9 +318,49 @@ void WiFiOTAClass::pollServer(Client& client)
         if (pos)
             request.remove(pos,request.length()-pos);    
 
-            
+   if (request.startsWith(F("POST"))) 
+                  {
+                    method = HTTP_POST;
+                    //URI=request;
+                    request.remove(0,5);
+                    mode = 'w';
+                  }
+    else if (request.startsWith(F("GET")))       
+                  {
+                    method = HTTP_GET; 
+                    //URI=request;
+                    request.remove(0,4);
+                    mode = 'r';
+                  } 
+    else if (request.startsWith(F("PUT")))       
+                  {
+                    method = HTTP_PUT; 
+                    //URI=request;
+                    request.remove(0,4);
+                    mode = 'w';
+                  }   
+     else if (request.startsWith(F("DELETE")))       
+                  {
+                    method = HTTP_DELETE; 
+                    //URI=request;
+                    request.remove(0,7);
+                  }     
+      else if (request.startsWith(F("OPTIONS")))       
+                  {
+                    method = HTTP_OPTIONS; 
+                    //URI=request;
+                    request.remove(0,8);
+                  }                         
+
+    else 
+                  {
+                  flushRequestBody(client, contentLength);
+                  sendHttpResponse(client, 400);
+                  return;
+                  } 
+
    // Check custom handler
-   if (processCustomRequest && (retCode = processCustomRequest(client,request,contentLength,authorized, response)))
+   if (processCustomRequest && (retCode = processCustomRequest(client,request,method,contentLength,authorized, response)))
     {
       if (retCode == 1)
           {
@@ -328,57 +373,26 @@ void WiFiOTAClass::pollServer(Client& client)
           return;
           }  
     }
-    else if (!authorized) {
-      flushRequestBody(client, contentLength);
-      sendHttpResponse(client, 401);
+    else // local operation
+    { 
+
+    #ifdef CORS  
+    if (method == HTTP_OPTIONS)
+    {
+      sendHttpResponse(client, 200, false); 
+      client.println(F("Access-Control-Allow-Credentials: true"));
+      client.println(F("Access-Control-Allow-Methods: POST,GET,OPTIONS"));
+      client.println(F("Access-Control-Allow-Headers: Content-type,Connection,Authorization,Pragma"));
+      delay(100);
+      client.stop();
       return;
     }
-    else // Authorized local operation
-    { 
-    String URI;
+    #endif
+
     uint16_t  dataType = DATA_UNKNOWN;
-    uint8_t method = 0;
     long maxSize;
-    char mode = '\0';
 
-
-    if (request.startsWith(F("POST"))) 
-                  {
-                    method = HTTP_POST;
-                    URI=request;
-                    URI.remove(0,5);
-                    mode = 'w';
-                  }
-    else if (request.startsWith(F("GET")))       
-                  {
-                    method = HTTP_GET; 
-                    URI=request;
-                    URI.remove(0,4);
-                    mode = 'r';
-                  } 
-    else if (request.startsWith(F("PUT")))       
-                  {
-                    method = HTTP_PUT; 
-                    URI=request;
-                    URI.remove(0,4);
-                    mode = 'w';
-                  }   
-     else if (request.startsWith(F("DELETE")))       
-                  {
-                    method = HTTP_DELETE; 
-                    URI=request;
-                    URI.remove(0,7);
-                  }               
-
-    else 
-                  {
-                  flushRequestBody(client, contentLength);
-                  sendHttpResponse(client, 400);
-                  return;
-                  } 
-
-
-    if (!(maxSize=openStorage(URI, contentLength,mode,&dataType))) 
+    if (!(maxSize=openStorage(request, contentLength,mode,&dataType,authorized))) 
           {
             flushRequestBody(client, contentLength);
             sendHttpResponse(client, 500);
@@ -391,6 +405,12 @@ void WiFiOTAClass::pollServer(Client& client)
             sendHttpResponse(client, 404);
             return;
           }
+          
+    else if (maxSize == -2) {
+      flushRequestBody(client, contentLength);
+      sendHttpResponse(client, 401);
+      return;   
+    }   
 
     //Serial.print("Opened DT ");
     //Serial.println(dataType,HEX);

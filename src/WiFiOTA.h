@@ -38,6 +38,7 @@
 #define HTTP_GET    2
 #define HTTP_DELETE 3
 #define HTTP_PUT    4
+#define HTTP_OPTIONS 5
 
 
 
@@ -66,7 +67,7 @@ protected:
   void pollServer(Client& client);
 
 public:
-  void setCustomHandler(uint16_t (*fn)(Client& client, String request, long contentLength, bool authorized, String& response))
+  void setCustomHandler(uint16_t (*fn)(Client& client, String request, uint8_t method, long contentLength, bool authorized, String& response))
   {
     processCustomRequest = fn;
   }
@@ -84,7 +85,7 @@ public:
 
 private:
   void flushRequestBody(Client& client, long contentLength);
-  long openStorage(String fileName,long contentLength, char mode, uint16_t * dataType);
+  long openStorage(String fileName,long contentLength, char mode, uint16_t * dataType, bool isAuthorized);
   void closeStorage(uint16_t dataType);
 
 private:
@@ -98,7 +99,7 @@ private:
   uint32_t _lastMdnsResponseTime;
 
   void (*beforeApplyCallback)(void);
-  uint16_t (*processCustomRequest)(Client& client, String request, long contentLength, bool authorized, String& response);
+  uint16_t (*processCustomRequest)(Client& client,  String request, uint8_t method, long contentLength, bool authorized, String& response);
 };
 
 #endif
