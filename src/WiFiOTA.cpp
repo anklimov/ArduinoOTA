@@ -578,7 +578,9 @@ void WiFiOTAClass::sendHttpResponseWithText(Client& client, uint16_t code,  bool
 
     if (contentTypeCode)
     {
-    client.print(F("Connection: close\nContent-Type: "));  
+    //client.print(F("Connection: close\nContent-Type: "));  
+    client.println(F("Connection: close"));  
+    client.print(F("Content-Type: "));
     switch (contentTypeCode) {
       case HTTP_TEXT_PLAIN: client.println(F("text/plain"));
       break;
