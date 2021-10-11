@@ -83,7 +83,7 @@ void WiFiOTAClass::begin(IPAddress& localIP, const char* name, const char* passw
 {
   localIp = localIP;
   _name = name;
-  _expectedAuthorization = ("Basic ") + base64Encode("arduino:" + String(password));
+  _expectedAuthorization = String(F("Basic ")) + base64Encode(String(F("arduino:")) + String(password));
   _storage = &storage;
   _file=&cstream;
 }
@@ -238,14 +238,14 @@ void WiFiOTAClass::pollMdns(UDP &_mdnsSocket)
 long  WiFiOTAClass::openStorage(String fileName, long  contentLength, char mode, uint16_t * dataType, bool isAuthorized)
 {        
          if (!isAuthorized && mode =='w') return -2;
-         if (fileName == "/sketch" && mode == 'w')
+         if (fileName == String(F("/sketch")) && mode == 'w')
               { 
                 if (dataType) *dataType = DATA_SKETCH;
                 if (_storage && _storage->open(contentLength, DATA_SKETCH)) 
                         return _storage->maxSize(); else return 0;
               }
 
-         else if (fileName == "/data" && mode == 'w')    
+         else if (fileName == String(F("/data")) && mode == 'w')    
               {
                 if (dataType) *dataType = DATA_FS;
                 if (_storage && _storage->open(contentLength, DATA_FS)) 
@@ -546,9 +546,8 @@ void WiFiOTAClass::sendHttpResponseWithText(Client& client, uint16_t code,  bool
   }
   uint16_t  httpRetCode     = code & 0xFFF;
   uint16_t contentTypeCode = code & 0xF000; 
-    client.print(F("HTTP/1.1 "));
-  client.print(httpRetCode);
-  client.print(F(" "));
+  
+  client.print(String(F("HTTP/1.1 ")) + String(httpRetCode) + String F((" ")));
 
   switch (httpRetCode)
   {
@@ -574,8 +573,7 @@ void WiFiOTAClass::sendHttpResponseWithText(Client& client, uint16_t code,  bool
   }
          
   #ifdef CORS
-  client.print(F("Access-Control-Allow-Origin: "));
-  client.println(F(CORS));
+  client.println(F("Access-Control-Allow-Origin: " CORS));
   #endif
 
     if (contentTypeCode)
@@ -599,9 +597,8 @@ void WiFiOTAClass::sendHttpResponseWithText(Client& client, uint16_t code,  bool
   }
 
   if (response!="") 
-          {
-          client.println();  
-          client.print(response);
+          { 
+          client.print("\n"+response);
           if (closeSocket) {delay(100);client.stop();}
           }
   else  
