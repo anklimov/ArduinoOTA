@@ -526,9 +526,11 @@ void WiFiOTAClass::pollServer(Client& client)
           
         }
       client.stop();   
+      
 
      } //download
      else sendHttpResponse(client, 400);
+    closeStorage(dataType); 
     } //Authorized local operation
   }
 }

@@ -45,7 +45,7 @@ SerialFlashStorageClass SerialFlashStorage;
 //#define HTTP_OCTET_STREAM 0x0300
 
 
-const uint16_t OTA_PORT = 65280;
+//const uint16_t OTA_PORT = 65280;
 
 template <class NetServer, class NetClient>
 class ArduinoOTAClass : public WiFiOTAClass {
