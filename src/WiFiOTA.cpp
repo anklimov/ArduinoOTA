@@ -586,6 +586,9 @@ void WiFiOTAClass::sendHttpResponseWithText(Client& client, uint16_t code,  bool
       break;
       case 200: client.println(F("OK"));
       break;
+      case 304: client.println(F("Not Modified"));
+      break;      
+      
       default:
       client.println(F("Unknown"));
   }
