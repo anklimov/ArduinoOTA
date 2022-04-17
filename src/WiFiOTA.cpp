@@ -394,7 +394,8 @@ void WiFiOTAClass::pollServer(Client& client)
       sendHttpResponse(client, 200, false); 
       client.println(F("Access-Control-Allow-Credentials: true"));
       client.println(F("Access-Control-Allow-Methods: POST,GET,OPTIONS"));
-      client.println(F("Access-Control-Allow-Headers: Content-type,Connection,Authorization,Pragma"));
+      client.println(F("Access-Control-Allow-Headers: *"));
+      client.println(F("Access-Control-Request-Private-Network: true"));
       delay(100);
       client.stop();
       return;
@@ -452,7 +453,22 @@ void WiFiOTAClass::pollServer(Client& client)
           while (client.connected() && read < contentLength) {
             while (client.available()) {
               size_t l = client.read(buff, sizeof(buff));
-              
+
+              #if defined(__SAM3X8E__)
+              //Flash boundary = 4 
+              size_t i=l; 
+              while ((l % 4) && client.connected() && ((read+l) < contentLength)) 
+                  {
+                    int ch =client.read();
+                    if (ch>=0)
+                        {
+                        buff[i]=ch;
+                        l++;
+                        i++;
+                        }
+                  }
+               #endif
+
                switch (dataType  & 0xF)
                 {
                 case DATA_SKETCH: 
@@ -582,6 +598,9 @@ void WiFiOTAClass::sendHttpResponseWithText(Client& client, uint16_t code,  bool
       break;
       case 200: client.println(F("OK"));
       break;
+      case 304: client.println(F("Not Modified"));
+      break;      
+      
       default:
       client.println(F("Unknown"));
   }
