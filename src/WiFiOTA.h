@@ -59,7 +59,7 @@ protected:
   WiFiOTAClass();
 
   void begin(IPAddress& localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& cstream);
-
+  void begin(IPAddress& localIP, const char* name, const char* password, OTAStorage& storage);
 #ifndef DISABLE_ARDUINO_OTA_MDNS
   void pollMdns(UDP &mdnsSocket);
 #endif

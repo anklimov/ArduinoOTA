@@ -88,6 +88,15 @@ void WiFiOTAClass::begin(IPAddress& localIP, const char* name, const char* passw
   _file=&cstream;
 }
 
+void WiFiOTAClass::begin(IPAddress& localIP, const char* name, const char* password, OTAStorage& storage)
+{
+  localIp = localIP;
+  _name = name;
+  _expectedAuthorization = String(F("Basic ")) + base64Encode(String(F("arduino:")) + String(password));
+  _storage = &storage;
+  _file=NULL;
+}
+
 #ifndef ARDUINO_OTA_MDNS_DISABLE
 void WiFiOTAClass::pollMdns(UDP &_mdnsSocket)
 {
@@ -273,8 +282,11 @@ void WiFiOTAClass::closeStorage(uint16_t dataType)
           _storage->close();
         break;
         case DATA_FILE:
+        if (_file)
+        {
           _file->putEOF();
           _file->close();
+        }  
         break;                  
         }  
   }
@@ -451,7 +463,7 @@ void WiFiOTAClass::pollServer(Client& client)
  
                 break;
                 case DATA_FILE:
-                      _file->write(buff,l);
+                      if (_file) _file->write(buff,l);
              //         Serial.write(buff,l);
                       read += l;
                 break;
@@ -506,7 +518,7 @@ void WiFiOTAClass::pollServer(Client& client)
             client.println();
            // if (!_file) break;
            // _file->seek();
-              while ( client.connected()  && _file->available() ) 
+              while ( client.connected()  && _file && _file->available() ) 
                 {
                   ch = _file->read();
 

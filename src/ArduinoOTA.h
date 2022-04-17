@@ -60,10 +60,15 @@ public:
 	    {
 	    };
 
-  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& file = NULL) {
+  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& file) {
     WiFiOTAClass::begin(localIP, name, password, storage, file);
     server.begin();
   }
+
+  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage) {
+    WiFiOTAClass::begin(localIP, name, password, storage);
+    server.begin();
+  }  
 
   void end() {
 #if defined(ESP8266) || defined(ESP32)
@@ -95,7 +100,7 @@ private:
 public:
   ArduinoOTAMdnsClass() {};
 
-  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& file = NULL) {
+  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage, seekableStream& file) {
     ArduinoOTAClass<NetServer, NetClient>::begin(localIP, name, password, storage, file);
 #if defined(ESP8266) && !(defined(ethernet_h_) || defined(ethernet_h) || defined(UIPETHERNET_H))
     mdnsSocket.beginMulticast(localIP, IPAddress(224, 0, 0, 251), 5353);
@@ -103,6 +108,16 @@ public:
     mdnsSocket.beginMulticast(IPAddress(224, 0, 0, 251), 5353);
 #endif
   }
+
+  void begin(IPAddress localIP, const char* name, const char* password, OTAStorage& storage) {
+    ArduinoOTAClass<NetServer, NetClient>::begin(localIP, name, password, storage);
+#if defined(ESP8266) && !(defined(ethernet_h_) || defined(ethernet_h) || defined(UIPETHERNET_H))
+    mdnsSocket.beginMulticast(localIP, IPAddress(224, 0, 0, 251), 5353);
+#else
+    mdnsSocket.beginMulticast(IPAddress(224, 0, 0, 251), 5353);
+#endif
+  }
+
 
   void end() {
     ArduinoOTAClass<NetServer, NetClient>::end();
