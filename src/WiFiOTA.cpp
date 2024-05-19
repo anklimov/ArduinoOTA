@@ -83,7 +83,7 @@ void WiFiOTAClass::begin(IPAddress& localIP, const char* name, const char* passw
 {
   localIp = localIP;
   _name = name;
-  _expectedAuthorization = String(F("Basic ")) + base64Encode(String(F("arduino:")) + String(password));
+  _expectedAuthorization = String(F("Basic ")) + base64Encode(String(name) + String(F(":")) + String(password));
   _storage = &storage;
   _file=&cstream;
 }
@@ -92,7 +92,7 @@ void WiFiOTAClass::begin(IPAddress& localIP, const char* name, const char* passw
 {
   localIp = localIP;
   _name = name;
-  _expectedAuthorization = String(F("Basic ")) + base64Encode(String(F("arduino:")) + String(password));
+  _expectedAuthorization = String(F("Basic ")) + base64Encode(String(name) + String(F(":")) + String(password));
   _storage = &storage;
   _file=NULL;
 }

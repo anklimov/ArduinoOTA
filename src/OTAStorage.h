@@ -44,6 +44,7 @@ public:
   virtual int read() = 0;
 
   virtual long maxSize() {
+    Serial.print("amxSize:");Serial.println(MAX_FLASH - SKETCH_START_ADDRESS - bootloaderSize);
     return (MAX_FLASH - SKETCH_START_ADDRESS - bootloaderSize);
   }
 
